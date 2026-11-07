@@ -1,5 +1,5 @@
 -- ===================================================================
--- SKY TOWER SURVIVAL EXECUTOR SCRIPT (SPAWN AT FLOOR 1 CENTER)
+-- SKY TOWER SURVIVAL EXECUTOR SCRIPT (TELEPORT TO FLOOR 1 CENTER)
 -- ===================================================================
 
 local Players = game:GetService("Players")
@@ -29,7 +29,7 @@ ZombieFolder.Name = "Zombies"
 local ItemFolder = Instance.new("Folder", MapFolder)
 ItemFolder.Name = "Items"
 
--- Configuration (하늘 위 높은 곳에 위치, Y 좌표 대폭 상승)
+-- Configuration (하늘 위 높은 곳)
 local SkyHeightOffset = 500
 local FloorConfigs = {
     { Floor = 1, Count = 500, Height = SkyHeightOffset + 10, Size = Vector3.new(12, 2, 12), Grid = 23 },
@@ -39,7 +39,7 @@ local FloorConfigs = {
 }
 
 -- -------------------------------------------------------------------
--- 1. MAP GENERATION & 1ST FLOOR CENTER SPAWN
+-- 1. MAP GENERATION & TELEPORT TO FLOOR 1 CENTER
 -- -------------------------------------------------------------------
 local function BuildMap()
     for _, config in ipairs(FloorConfigs) do
@@ -68,9 +68,13 @@ local function BuildMap()
                 part.Parent = MapFolder
                 table.insert(DisappearingPlatforms, part)
 
-                -- 1층 중앙 발판 위치에 플레이어 스폰 시키기 (x와 z가 중간값일 때)
+                -- 1층의 정확한 정중앙 발판 위치로 강제 텔레포트
                 if config.Floor == 1 and math.floor(gridWidth / 2) == x and math.floor(gridWidth / 2) == z then
-                    HumanoidRootPart.CFrame = part.CFrame + Vector3.new(0, 5, 0)
+                    task.defer(function()
+                        if Character and HumanoidRootPart then
+                            HumanoidRootPart.CFrame = part.CFrame + Vector3.new(0, 5, 0)
+                        end
+                    end)
                 end
 
                 -- 발판 터치 시 사라지는 로직
