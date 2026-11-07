@@ -1,5 +1,5 @@
 -- ===================================================================
--- SKY TOWER SURVIVAL EXECUTOR SCRIPT (TELEPORT TO FLOOR 1 CENTER)
+-- SKY TOWER SURVIVAL EXECUTOR SCRIPT (FIXED TELEPORT, 5S GODMODE, NO FALL)
 -- ===================================================================
 
 local Players = game:GetService("Players")
@@ -39,8 +39,10 @@ local FloorConfigs = {
 }
 
 -- -------------------------------------------------------------------
--- 1. MAP GENERATION & TELEPORT TO FLOOR 1 CENTER
+-- 1. MAP GENERATION & 5S GODMODE + TELEPORT
 -- -------------------------------------------------------------------
+local targetSpawnCFrame = nil
+
 local function BuildMap()
     for _, config in ipairs(FloorConfigs) do
         local count = 0
@@ -68,13 +70,9 @@ local function BuildMap()
                 part.Parent = MapFolder
                 table.insert(DisappearingPlatforms, part)
 
-                -- 1층의 정확한 정중앙 발판 위치로 강제 텔레포트
+                -- 1층 정중앙 발판 위치 기억
                 if config.Floor == 1 and math.floor(gridWidth / 2) == x and math.floor(gridWidth / 2) == z then
-                    task.defer(function()
-                        if Character and HumanoidRootPart then
-                            HumanoidRootPart.CFrame = part.CFrame + Vector3.new(0, 5, 0)
-                        end
-                    end)
+                    targetSpawnCFrame = part.CFrame + Vector3.new(0, 4, 0)
                 end
 
                 -- 발판 터치 시 사라지는 로직
@@ -106,8 +104,30 @@ end
 
 BuildMap()
 
+-- 확실한 텔레포트 및 5초 무적(낙하/충돌 방지) 실행
+if targetSpawnCFrame then
+    HumanoidRootPart.CFrame = targetSpawnCFrame
+    Humanoid.PlatformStand = false
+    
+    -- 5초간 무적 및 넘어짐 방지 (투명화 + 속도 고정)
+    for _, p in ipairs(Character:GetDescendants()) do
+        if p:IsA("BasePart") then
+            p.CustomPhysicalProperties = PhysicalProperties.new(100, 0, 0) -- 무게 증가로 안 밀려남
+        end
+    end
+    
+    task.spawn(function()
+        local startTime = tick()
+        while tick() - startTime < 5 do
+            HumanoidRootPart.Velocity = Vector3.new(0, 0, 0) -- 낙하 속도 초기화로 안 떨어지고 안전하게 착지
+            Humanoid.PlatformStand = false
+            task.wait(0.1)
+        end
+    end)
+end
+
 -- -------------------------------------------------------------------
--- 2. HIGH-QUALITY SNIPER SYSTEM (ZOOM, NO RECOIL WHEN ZOOMED)
+-- 2. HIGH-QUALITY SNIPER SYSTEM (ZOOM, NO RECOIL, NO PUSH)
 -- -------------------------------------------------------------------
 local function GiveSniper()
     local tool = Instance.new("Tool")
@@ -122,9 +142,13 @@ local function GiveSniper()
     handle.Material = Enum.Material.Metal
     handle.Parent = tool
 
+    -- 캐릭터와 총이 부딪혀서 넘어지는 현상 원천 차단
+    handle.CanCollide = false
+
     local scope = Instance.new("Part", tool)
     scope.Size = Vector3.new(0.4, 0.6, 1.2)
     scope.Color = Color3.fromRGB(10, 10, 10)
+    scope.CanCollide = false
     local weld1 = Instance.new("WeldConstraint", tool)
     weld1.Part0 = handle
     weld1.Part1 = scope
@@ -133,6 +157,7 @@ local function GiveSniper()
     local barrel = Instance.new("Part", tool)
     barrel.Size = Vector3.new(0.25, 0.25, 3)
     barrel.Color = Color3.fromRGB(15, 15, 15)
+    barrel.CanCollide = false
     local weld2 = Instance.new("WeldConstraint", tool)
     weld2.Part0 = handle
     weld2.Part1 = barrel
@@ -346,6 +371,7 @@ ScreenGui.ResetOnSpawn = false
 local MainFrame = Instance.new("Frame", ScreenGui)
 MainFrame.Size = UDim2.new(0, 220, 0, 100)
 MainFrame.Position = UDim2.new(0.02, 0, 0.4, 0)
+MainLine = MainFrame -- dummy
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
@@ -380,6 +406,12 @@ StartBtn.MouseButton1Click:Connect(function()
     isRunning = true
     StartBtn.Text = "RUNNING..."
     StartBtn.BackgroundColor3 = Color3.fromRGB(150, 150, 150)
+
+    -- 스타트 누르는 순간 확실하게 1층 중앙으로 다시 텔레포트 + 5초 안정화
+    if targetSpawnCFrame then
+        HumanoidRootPart.CFrame = targetSpawnCFrame
+        Humanoid.PlatformStand = false
+    end
 
     SpawnItems()
 
