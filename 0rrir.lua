@@ -1,5 +1,5 @@
 -- ===================================================================
--- SKY TOWER SURVIVAL EXECUTOR SCRIPT (FIXED TELEPORT, 5S GODMODE, NO FALL)
+-- SKY TOWER SURVIVAL EXECUTOR SCRIPT (10S GODMODE, ZOOM BTN, RELOAD)
 -- ===================================================================
 
 local Players = game:GetService("Players")
@@ -29,17 +29,17 @@ ZombieFolder.Name = "Zombies"
 local ItemFolder = Instance.new("Folder", MapFolder)
 ItemFolder.Name = "Items"
 
--- Configuration (하늘 위 높은 곳)
+-- Configuration (5층 -> 4 -> 3 -> 2)
 local SkyHeightOffset = 500
 local FloorConfigs = {
-    { Floor = 1, Count = 500, Height = SkyHeightOffset + 10, Size = Vector3.new(12, 2, 12), Grid = 23 },
-    { Floor = 2, Count = 350, Height = SkyHeightOffset + 70, Size = Vector3.new(12, 2, 12), Grid = 19 },
+    { Floor = 5, Count = 500, Height = SkyHeightOffset + 250, Size = Vector3.new(12, 2, 12), Grid = 23 },
+    { Floor = 4, Count = 350, Height = SkyHeightOffset + 190, Size = Vector3.new(12, 2, 12), Grid = 19 },
     { Floor = 3, Count = 200, Height = SkyHeightOffset + 130, Size = Vector3.new(12, 2, 12), Grid = 15 },
-    { Floor = 4, Count = 100, Height = SkyHeightOffset + 190, Size = Vector3.new(12, 2, 12), Grid = 10 }
+    { Floor = 2, Count = 100, Height = SkyHeightOffset + 70, Size = Vector3.new(12, 2, 12), Grid = 10 }
 }
 
 -- -------------------------------------------------------------------
--- 1. MAP GENERATION & 5S GODMODE + TELEPORT
+-- 1. MAP GENERATION & 10-SECOND GODMODE TELEPORT
 -- -------------------------------------------------------------------
 local targetSpawnCFrame = nil
 
@@ -62,20 +62,18 @@ local function BuildMap()
                 part.Anchored = true
                 part.Material = Enum.Material.Neon
                 
-                if config.Floor == 1 then part.Color = Color3.fromRGB(0, 170, 255)
-                elseif config.Floor == 2 then part.Color = Color3.fromRGB(85, 255, 127)
-                elseif config.Floor == 3 then part.Color = Color3.fromRGB(255, 170, 0)
-                elseif config.Floor == 4 then part.Color = Color3.fromRGB(255, 50, 50) end
+                if config.Floor == 5 then part.Color = Color3.fromRGB(255, 50, 50)
+                elseif config.Floor == 4 then part.Color = Color3.fromRGB(255, 170, 0)
+                elseif config.Floor == 3 then part.Color = Color3.fromRGB(85, 255, 127)
+                elseif config.Floor == 2 then part.Color = Color3.fromRGB(0, 170, 255) end
 
                 part.Parent = MapFolder
                 table.insert(DisappearingPlatforms, part)
 
-                -- 1층 정중앙 발판 위치 기억
-                if config.Floor == 1 and math.floor(gridWidth / 2) == x and math.floor(gridWidth / 2) == z then
+                if config.Floor == 5 and math.floor(gridWidth / 2) == x and math.floor(gridWidth / 2) == z then
                     targetSpawnCFrame = part.CFrame + Vector3.new(0, 4, 0)
                 end
 
-                -- 발판 터치 시 사라지는 로직
                 local isFading = false
                 part.Touched:Connect(function(hit)
                     if hit.Parent == Character and not isFading then
@@ -104,31 +102,41 @@ end
 
 BuildMap()
 
--- 확실한 텔레포트 및 5초 무적(낙하/충돌 방지) 실행
-if targetSpawnCFrame then
-    HumanoidRootPart.CFrame = targetSpawnCFrame
-    Humanoid.PlatformStand = false
+-- 10초 무적 및 5층 중앙 스폰 함수
+local function ApplyGodModeAndTeleport()
+    if targetSpawnCFrame then
+        HumanoidRootPart.CFrame = targetSpawnCFrame
+    end
     
-    -- 5초간 무적 및 넘어짐 방지 (투명화 + 속도 고정)
-    for _, p in ipairs(Character:GetDescendants()) do
-        if p:IsA("BasePart") then
-            p.CustomPhysicalProperties = PhysicalProperties.new(100, 0, 0) -- 무게 증가로 안 밀려남
+    -- 10초간 무적 (반투명화 및 추락 방지)
+    for _, part in ipairs(Character:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.Transparency = 0.4
         end
     end
     
     task.spawn(function()
-        local startTime = tick()
-        while tick() - startTime < 5 do
-            HumanoidRootPart.Velocity = Vector3.new(0, 0, 0) -- 낙하 속도 초기화로 안 떨어지고 안전하게 착지
-            Humanoid.PlatformStand = false
+        local start = tick()
+        while tick() - start < 10 do
+            HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
             task.wait(0.1)
+        end
+        -- 무적 해제
+        for _, part in ipairs(Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.Transparency = 0
+            end
         end
     end)
 end
 
+ApplyGodModeAndTeleport()
+
 -- -------------------------------------------------------------------
--- 2. HIGH-QUALITY SNIPER SYSTEM (ZOOM, NO RECOIL, NO PUSH)
+-- 2. HQ SNIPER SYSTEM (ZOOM BUTTON, 1/INF AMMO, RELOAD)
 -- -------------------------------------------------------------------
+local isZoomed = false
+
 local function GiveSniper()
     local tool = Instance.new("Tool")
     tool.Name = "HQ Sniper Rifle"
@@ -140,27 +148,25 @@ local function GiveSniper()
     handle.Size = Vector3.new(0.6, 0.8, 4.5)
     handle.Color = Color3.fromRGB(20, 20, 20)
     handle.Material = Enum.Material.Metal
-    handle.Parent = tool
-
-    -- 캐릭터와 총이 부딪혀서 넘어지는 현상 원천 차단
     handle.CanCollide = false
+    handle.Parent = tool
 
     local scope = Instance.new("Part", tool)
     scope.Size = Vector3.new(0.4, 0.6, 1.2)
     scope.Color = Color3.fromRGB(10, 10, 10)
     scope.CanCollide = false
-    local weld1 = Instance.new("WeldConstraint", tool)
-    weld1.Part0 = handle
-    weld1.Part1 = scope
+    local w1 = Instance.new("WeldConstraint", tool)
+    w1.Part0 = handle
+    w1.Part1 = scope
     scope.CFrame = handle.CFrame * CFrame.new(0, 0.6, 0)
 
     local barrel = Instance.new("Part", tool)
     barrel.Size = Vector3.new(0.25, 0.25, 3)
     barrel.Color = Color3.fromRGB(15, 15, 15)
     barrel.CanCollide = false
-    local weld2 = Instance.new("WeldConstraint", tool)
-    weld2.Part0 = handle
-    weld2.Part1 = barrel
+    local w2 = Instance.new("WeldConstraint", tool)
+    w2.Part0 = handle
+    w2.Part1 = barrel
     barrel.CFrame = handle.CFrame * CFrame.new(0, 0.2, -3.5)
 
     local shootSound = Instance.new("Sound", handle)
@@ -168,30 +174,21 @@ local function GiveSniper()
     shootSound.Volume = 2
     shootSound.Pitch = 0.8
 
-    local isZoomed = false
     local defaultFOV = 70
     local zoomFOV = 15
+    local ammo = 1
+    local maxAmmo = 1
+    local isReloading = false
     local lastShot = 0
     local fireRate = 0.85
 
-    UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if tool.Parent == Character and input.UserInputType == Enum.UserInputType.MouseButton2 then
-            isZoomed = true
-            TweenService:Create(Camera, TweenInfo.new(0.2), {FieldOfView = zoomFOV}):Play()
-        end
-    end)
-
-    UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton2 then
-            isZoomed = false
-            TweenService:Create(Camera, TweenInfo.new(0.2), {FieldOfView = defaultFOV}):Play()
-        end
-    end)
-
+    -- 발사 로직
     tool.Activated:Connect(function()
+        if isReloading or ammo <= 0 then return end
         if tick() - lastShot < fireRate then return end
         lastShot = tick()
 
+        ammo = ammo - 1
         shootSound:Play()
 
         local recoilPitch = isZoomed and 0.2 or 4
@@ -217,13 +214,9 @@ local function GiveSniper()
             local zHum = zombieModel:FindFirstChild("ZombieHumanoid")
             local damage = 20
 
-            if hitPart.Name == "Head" then
-                damage = 100
-            elseif hitPart.Name == "Torso" then
-                damage = 45
-            elseif hitPart.Name == "LeftLeg" or hitPart.Name == "RightLeg" then
-                damage = 20
-            end
+            if hitPart.Name == "Head" then damage = 100
+            elseif hitPart.Name == "Torso" then damage = 45
+            elseif hitPart.Name == "LeftLeg" or hitPart.Name == "RightLeg" then damage = 20 end
 
             zHum:TakeDamage(damage)
 
@@ -239,6 +232,16 @@ local function GiveSniper()
             text.Font = Enum.Font.FredokaOne
             game:GetService("Debris"):AddItem(hitMarker, 0.5)
         end
+
+        -- 자동 재장전 안내 (R 키 또는 탄 없을 때)
+        task.spawn(function()
+            if ammo <= 0 then
+                isReloading = true
+                task.wait(1.2) -- 장전 시간 1.2초
+                ammo = 1
+                isReloading = false
+            end
+        end)
     end)
 
     tool.Unequipped:Connect(function()
@@ -362,16 +365,16 @@ local function SpawnItems()
 end
 
 -- -------------------------------------------------------------------
--- 5. GUI INTERFACE
+-- 5. GUI INTERFACE (START BUTTON & ZOOM BUTTON)
 -- -------------------------------------------------------------------
 local ScreenGui = Instance.new("ScreenGui", LocalPlayer:WaitForChild("PlayerGui"))
 ScreenGui.Name = "TowerSurvivalGui"
 ScreenGui.ResetOnSpawn = false
 
+-- 메인 패널 (시작 버튼)
 local MainFrame = Instance.new("Frame", ScreenGui)
-MainFrame.Size = UDim2.new(0, 220, 0, 100)
+MainFrame.Size = UDim2.new(0, 220, 0, 110)
 MainFrame.Position = UDim2.new(0.02, 0, 0.4, 0)
-MainLine = MainFrame -- dummy
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
@@ -381,7 +384,7 @@ local UICorner = Instance.new("UICorner", MainFrame)
 UICorner.CornerRadius = UDim.new(0, 10)
 
 local Title = Instance.new("TextLabel", MainFrame)
-Title.Size = UDim2.new(1, 0, 0.4, 0)
+Title.Size = UDim2.new(1, 0, 0.35, 0)
 Title.BackgroundTransparency = 1
 Title.Text = "SKY TOWER SURVIVAL"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -389,8 +392,8 @@ Title.TextScaled = true
 Title.Font = Enum.Font.GothamBold
 
 local StartBtn = Instance.new("TextButton", MainFrame)
-StartBtn.Size = UDim2.new(0.85, 0, 0.4, 0)
-StartBtn.Position = UDim2.new(0.075, 0, 0.5, 0)
+StartBtn.Size = UDim2.new(0.85, 0, 0.45, 0)
+StartBtn.Position = UDim2.new(0.075, 0, 0.45, 0)
 StartBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 127)
 StartBtn.Text = "START GAME"
 StartBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -400,6 +403,34 @@ StartBtn.Font = Enum.Font.GothamBold
 local BtnCorner = Instance.new("UICorner", StartBtn)
 BtnCorner.CornerRadius = UDim.new(0, 8)
 
+-- 스코프 확대(ZOOM) 버튼 생성 (화면 우측 하단 또는 조작 편한 위치)
+local ZoomBtn = Instance.new("TextButton", ScreenGui)
+ZoomBtn.Size = UDim2.new(0, 120, 0, 50)
+ZoomBtn.Position = UDim2.new(0.85, 0, 0.75, 0)
+ZoomBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+ZoomBtn.Text = "SCOPE [ZOOM]"
+ZoomBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ZoomBtn.TextScaled = true
+ZoomBtn.Font = Enum.Font.GothamBold
+ZoomBtn.Active = true
+ZoomBtn.Draggable = true
+
+local ZoomCorner = Instance.new("UICorner", ZoomBtn)
+ZoomCorner.CornerRadius = UDim.new(0, 10)
+
+-- 줌 버튼 토글 기능
+ZoomBtn.MouseButton1Click:Connect(function()
+    isZoomed = not isZoomed
+    if isZoomed then
+        ZoomBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+        TweenService:Create(Camera, TweenInfo.new(0.2), {FieldOfView = 15}):Play()
+    else
+        ZoomBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+        TweenService:Create(Camera, TweenInfo.new(0.2), {FieldOfView = 70}):Play()
+    end
+end)
+
+-- 게임 시작 루프
 local isRunning = false
 StartBtn.MouseButton1Click:Connect(function()
     if isRunning then return end
@@ -407,12 +438,11 @@ StartBtn.MouseButton1Click:Connect(function()
     StartBtn.Text = "RUNNING..."
     StartBtn.BackgroundColor3 = Color3.fromRGB(150, 150, 150)
 
-    -- 스타트 누르는 순간 확실하게 1층 중앙으로 다시 텔레포트 + 5초 안정화
     if targetSpawnCFrame then
         HumanoidRootPart.CFrame = targetSpawnCFrame
-        Humanoid.PlatformStand = false
     end
 
+    ApplyGodModeAndTeleport()
     SpawnItems()
 
     task.spawn(function()
