@@ -1,5 +1,5 @@
 -- ===================================================================
--- SNIPER TOWER SURVIVAL EXECUTOR SCRIPT
+-- SKY TOWER SURVIVAL EXECUTOR SCRIPT (SPAWN AT FLOOR 1 CENTER)
 -- ===================================================================
 
 local Players = game:GetService("Players")
@@ -10,6 +10,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 local Humanoid = Character:WaitForChild("Humanoid")
 local Camera = Workspace.CurrentCamera
 
@@ -28,16 +29,17 @@ ZombieFolder.Name = "Zombies"
 local ItemFolder = Instance.new("Folder", MapFolder)
 ItemFolder.Name = "Items"
 
--- Configuration
+-- Configuration (하늘 위 높은 곳에 위치, Y 좌표 대폭 상승)
+local SkyHeightOffset = 500
 local FloorConfigs = {
-    { Floor = 1, Count = 500, Height = 10, Size = Vector3.new(12, 2, 12), Grid = 23 },
-    { Floor = 2, Count = 350, Height = 70, Size = Vector3.new(12, 2, 12), Grid = 19 },
-    { Floor = 3, Count = 200, Height = 130, Size = Vector3.new(12, 2, 12), Grid = 15 },
-    { Floor = 4, Count = 100, Height = 190, Size = Vector3.new(12, 2, 12), Grid = 10 }
+    { Floor = 1, Count = 500, Height = SkyHeightOffset + 10, Size = Vector3.new(12, 2, 12), Grid = 23 },
+    { Floor = 2, Count = 350, Height = SkyHeightOffset + 70, Size = Vector3.new(12, 2, 12), Grid = 19 },
+    { Floor = 3, Count = 200, Height = SkyHeightOffset + 130, Size = Vector3.new(12, 2, 12), Grid = 15 },
+    { Floor = 4, Count = 100, Height = SkyHeightOffset + 190, Size = Vector3.new(12, 2, 12), Grid = 10 }
 }
 
 -- -------------------------------------------------------------------
--- 1. MAP GENERATION (FLOORS 1~4)
+-- 1. MAP GENERATION & 1ST FLOOR CENTER SPAWN
 -- -------------------------------------------------------------------
 local function BuildMap()
     for _, config in ipairs(FloorConfigs) do
@@ -66,6 +68,12 @@ local function BuildMap()
                 part.Parent = MapFolder
                 table.insert(DisappearingPlatforms, part)
 
+                -- 1층 중앙 발판 위치에 플레이어 스폰 시키기 (x와 z가 중간값일 때)
+                if config.Floor == 1 and math.floor(gridWidth / 2) == x and math.floor(gridWidth / 2) == z then
+                    HumanoidRootPart.CFrame = part.CFrame + Vector3.new(0, 5, 0)
+                end
+
+                -- 발판 터치 시 사라지는 로직
                 local isFading = false
                 part.Touched:Connect(function(hit)
                     if hit.Parent == Character and not isFading then
@@ -95,7 +103,7 @@ end
 BuildMap()
 
 -- -------------------------------------------------------------------
--- 2. HIGH-QUALITY SNIPER SYSTEM (ZOOM, RECOIL, HITBOX DAMAGE)
+-- 2. HIGH-QUALITY SNIPER SYSTEM (ZOOM, NO RECOIL WHEN ZOOMED)
 -- -------------------------------------------------------------------
 local function GiveSniper()
     local tool = Instance.new("Tool")
@@ -110,7 +118,6 @@ local function GiveSniper()
     handle.Material = Enum.Material.Metal
     handle.Parent = tool
 
-    -- Scope & Barrel
     local scope = Instance.new("Part", tool)
     scope.Size = Vector3.new(0.4, 0.6, 1.2)
     scope.Color = Color3.fromRGB(10, 10, 10)
@@ -138,7 +145,6 @@ local function GiveSniper()
     local lastShot = 0
     local fireRate = 0.85
 
-    -- Right Click to Zoom
     UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if tool.Parent == Character and input.UserInputType == Enum.UserInputType.MouseButton2 then
             isZoomed = true
@@ -153,24 +159,20 @@ local function GiveSniper()
         end
     end)
 
-    -- Shoot Logic
     tool.Activated:Connect(function()
         if tick() - lastShot < fireRate then return end
         lastShot = tick()
 
         shootSound:Play()
 
-        -- Recoil (Zoomed = No Recoil / Unzoomed = Heavy Recoil)
         local recoilPitch = isZoomed and 0.2 or 4
         local recoilYaw = isZoomed and 0.1 or 2
         Camera.CFrame = Camera.CFrame * CFrame.Angles(math.rad(recoilPitch), math.rad(math.random(-recoilYaw, recoilYaw)), 0)
 
-        -- Raycast
         local mouse = LocalPlayer:GetMouse()
         local ray = Ray.new(handle.Position, (mouse.Hit.p - handle.Position).Unit * 1000)
         local hitPart, hitPos = Workspace:FindPartOnRayWithIgnoreList(ray, {Character, MapFolder})
 
-        -- Bullet Tracer
         local tracer = Instance.new("Part", Workspace)
         tracer.Anchored = true
         tracer.CanCollide = false
@@ -181,11 +183,10 @@ local function GiveSniper()
         TweenService:Create(tracer, TweenInfo.new(0.1), {Transparency = 1}):Play()
         game:GetService("Debris"):AddItem(tracer, 0.1)
 
-        -- Damage Calculation based on Hit Part
         if hitPart and hitPart.Parent and hitPart.Parent:FindFirstChild("ZombieHumanoid") then
             local zombieModel = hitPart.Parent
             local zHum = zombieModel:FindFirstChild("ZombieHumanoid")
-            local damage = 20 -- Default Leg Damage
+            local damage = 20
 
             if hitPart.Name == "Head" then
                 damage = 100
@@ -197,7 +198,6 @@ local function GiveSniper()
 
             zHum:TakeDamage(damage)
 
-            -- Damage Popup
             local hitMarker = Instance.new("BillboardGui", hitPart)
             hitMarker.Size = UDim2.new(0, 60, 0, 60)
             hitMarker.AlwaysOnTop = true
@@ -256,7 +256,6 @@ local function SpawnZombie()
     rLeg.Size = Vector3.new(0.8, 2, 1)
     rLeg.Position = torso.Position + Vector3.new(0.5, -2, 0)
 
-    -- Welds
     for _, part in ipairs({head, lLeg, rLeg}) do
         local w = Instance.new("WeldConstraint", zombie)
         w.Part0 = torso
@@ -354,7 +353,7 @@ UICorner.CornerRadius = UDim.new(0, 10)
 local Title = Instance.new("TextLabel", MainFrame)
 Title.Size = UDim2.new(1, 0, 0.4, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "SNIPER SURVIVAL"
+Title.Text = "SKY TOWER SURVIVAL"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.TextScaled = true
 Title.Font = Enum.Font.GothamBold
